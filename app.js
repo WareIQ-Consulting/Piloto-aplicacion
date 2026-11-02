@@ -105,7 +105,37 @@ async function enviarInventarioGoogleSheets(registro) {
 }
 
 
-function finalizeRecord(){if(current.status==='final'&&!editMode)return;const e=validate();if(e){showValidationError(e);return}if(editMode){if(!admin()){toast('El perfil auditor no puede corregir registros finalizados.');return}const reason=document.getElementById('reason')?.value.trim();if(!reason){toast('Escribe el motivo de la corrección.');return}const before=storeData.records.find(r=>r.id===current.id);const changes=[];for(const k of ['agency','date','period','stock','short','over','debt','coi','cratesSystem','cratesPhysical','responsible','pending','assets','docs','notes','extraAssets'])if(JSON.stringify(k==='extraAssets'?(before[k]||[]):before[k])!==JSON.stringify(current[k]))changes.push({field:k,before:before[k],after:current[k]});if(!changes.length){toast('No hay cambios para guardar.');return}current.revision=(before.revision||1)+1;current.history.push({at:new Date().toISOString(),by:user().id,reason,changes});}else{current.revision=1;if(current.signature.mode==='omitted'){current.signature.capturedAt=new Date().toISOString();current.signature.snapshot=inventorySnapshot(current);current.signature.version=1}current.status='final';current.finalized=new Date().toISOString();current.history.push({at:current.finalized,by:user().id,reason:'Finalización del registro de prueba',changes:[]})}const wasEdit=editMode;if(saveCurrent()){nav('records');toast(wasEdit?'Corrección guardada.':'Registro guardado en este dispositivo.')}}
+function finalizeRecord(){if(current.status==='final'&&!editMode)return;const e=validate();if(e){showValidationError(e);return}if(editMode){if(!admin()){toast('El perfil auditor no puede corregir registros finalizados.');return}const reason=document.getElementById('reason')?.value.trim();if(!reason){toast('Escribe el motivo de la corrección.');return}const before=storeData.records.find(r=>r.id===current.id);const changes=[];for(const k of ['agency','date','period','stock','short','over','debt','coi','cratesSystem','cratesPhysical','responsible','pending','assets','docs','notes','extraAssets'])if(JSON.stringify(k==='extraAssets'?(before[k]||[]):before[k])!==JSON.stringify(current[k]))changes.push({field:k,before:before[k],after:current[k]});if(!changes.length){toast('No hay cambios para guardar.');return}current.revision=(before.revision||1)+1;current.history.push({at:new Date().toISOString(),by:user().id,reason,changes});}else{current.revision=1;if(current.signature.mode==='omitted'){current.signature.capturedAt=new Date().toISOString();current.signature.snapshot=inventorySnapshot(current);current.signature.version=1}current.status='final';current.finalized=new Date().toISOString();current.history.push({at:current.finalized,by:user().id,reason:'Finalización del registro de prueba',changes:[]})}
+
+
+const wasEdit = editMode;
+
+if (saveCurrent()) {
+  const registroParaEnviar = JSON.parse(
+    JSON.stringify(current)
+  );
+
+  nav('records');
+
+  toast('Registro guardado. Intentando enviar a Google Sheets...');
+
+  enviarInventarioGoogleSheets(registroParaEnviar)
+    .then(() => {
+      toast(
+        'Envío realizado, pendiente de confirmar en Google Sheets.'
+      );
+    })
+    .catch(error => {
+      console.error('Error de sincronización:', error);
+
+      toast(
+        'No se pudo enviar. El inventario sigue guardado en este dispositivo.'
+      );
+    });
+}
+
+                          
+                          
 function canDeleteRecord(r){return !!r&&(admin()||r.auditor===user().id)}
 function deleteRecord(id){const r=storeData.records.find(r=>r.id===id);if(!canDeleteRecord(r))return false;const before=storeData.records;storeData.records=before.filter(r=>r.id!==id);if(!persist()){storeData.records=before;return false}if(current?.id===id){current=null;editMode=false}page='records';render();toast('Registro de prueba eliminado. Ya puedes registrar otra vez esta agencia y mes.');return true}
 function requestDeleteRecord(id){const r=storeData.records.find(r=>r.id===id);if(!canDeleteRecord(r))return;const dialog=document.createElement('dialog');dialog.setAttribute('aria-labelledby','delete-title');dialog.innerHTML=`<h2 id="delete-title">Eliminar registro de prueba</h2><p><strong>${esc(r.agency||'Sin agencia')} · ${esc(agency(r.agency)?.name||'Borrador')}</strong><br>${esc(periodLabel(r.period))} · ${r.status==='final'?'Finalizado':'Borrador'}</p><p>Se eliminarán los datos, la firma y el historial de este registro guardado en este navegador. La agencia y su catálogo de activos se conservarán. Podrás registrar nuevamente esta agencia y mes.</p><p class="note">Si deseas conservar la prueba, cancela y descarga un respaldo en «Base de prueba».</p><div class="toolbar"><button class="btn" data-cancel-delete autofocus>Cancelar</button><button class="btn primary" data-confirm-delete>Eliminar registro</button></div>`;document.body.append(dialog);dialog.querySelector('[data-cancel-delete]').onclick=()=>dialog.close();dialog.querySelector('[data-confirm-delete]').onclick=()=>{if(deleteRecord(id))dialog.close()};dialog.onclose=()=>dialog.remove();dialog.showModal()}

@@ -80,6 +80,31 @@ return null}
 function validate(upTo=5){const errors=[validateBase(upTo),validateAdditions(upTo)].filter(Boolean);return errors.sort((a,b)=>a[0]-b[0])[0]||null}
 function showValidationError(e){step=e[0];render();document.getElementById('form-error').innerHTML=`<div class="error">${esc(e[1])}</div>`;document.getElementById('form-error').setAttribute('tabindex','-1');document.getElementById('form-error').focus?.();window.scrollTo(0,0)}
 function goToStep(target){if(!Number.isInteger(target)||target<0||target>=STEPS.length)return false;if(target>step&&canEdit()){const e=validate(target-1);if(e){showValidationError(e);return false}}if(current.status==='draft'&&!editMode&&!saveCurrent())return false;step=target;render();window.scrollTo(0,0);return true}
+
+
+const WAREIQ_API_URL =
+  'https://script.google.com/macros/s/AKfycbySKu0dBHPU-_edsVACsN9Ko7xJgdKQFXJz767RrE5n1tCIHBzZsZpTjevGX44A62DEOQ/exec';
+
+async function enviarInventarioGoogleSheets(registro) {
+  const respuesta = await fetch(WAREIQ_API_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8'
+    },
+    body: JSON.stringify({
+      tipo: 'inventario',
+      registro: registro
+    })
+  });
+
+  return {
+    enviado: true,
+    confirmado: false
+  };
+}
+
+
 function finalizeRecord(){if(current.status==='final'&&!editMode)return;const e=validate();if(e){showValidationError(e);return}if(editMode){if(!admin()){toast('El perfil auditor no puede corregir registros finalizados.');return}const reason=document.getElementById('reason')?.value.trim();if(!reason){toast('Escribe el motivo de la corrección.');return}const before=storeData.records.find(r=>r.id===current.id);const changes=[];for(const k of ['agency','date','period','stock','short','over','debt','coi','cratesSystem','cratesPhysical','responsible','pending','assets','docs','notes','extraAssets'])if(JSON.stringify(k==='extraAssets'?(before[k]||[]):before[k])!==JSON.stringify(current[k]))changes.push({field:k,before:before[k],after:current[k]});if(!changes.length){toast('No hay cambios para guardar.');return}current.revision=(before.revision||1)+1;current.history.push({at:new Date().toISOString(),by:user().id,reason,changes});}else{current.revision=1;if(current.signature.mode==='omitted'){current.signature.capturedAt=new Date().toISOString();current.signature.snapshot=inventorySnapshot(current);current.signature.version=1}current.status='final';current.finalized=new Date().toISOString();current.history.push({at:current.finalized,by:user().id,reason:'Finalización del registro de prueba',changes:[]})}const wasEdit=editMode;if(saveCurrent()){nav('records');toast(wasEdit?'Corrección guardada.':'Registro guardado en este dispositivo.')}}
 function canDeleteRecord(r){return !!r&&(admin()||r.auditor===user().id)}
 function deleteRecord(id){const r=storeData.records.find(r=>r.id===id);if(!canDeleteRecord(r))return false;const before=storeData.records;storeData.records=before.filter(r=>r.id!==id);if(!persist()){storeData.records=before;return false}if(current?.id===id){current=null;editMode=false}page='records';render();toast('Registro de prueba eliminado. Ya puedes registrar otra vez esta agencia y mes.');return true}

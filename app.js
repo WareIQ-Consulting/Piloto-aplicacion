@@ -133,7 +133,7 @@ if (saveCurrent()) {
       );
     });
 }
-
+}
                           
                           
 function canDeleteRecord(r){return !!r&&(admin()||r.auditor===user().id)}
